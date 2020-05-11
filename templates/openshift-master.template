@@ -17,12 +17,14 @@ Metadata:
           - PublicSubnet3CIDR
           - RemoteAccessCIDR
           - ContainerAccessCIDR
+          - NumberOfAZs
       - Label:
           default: DNS Configuration
         Parameters:
           - DomainName
           - HostedZoneID
           - SubDomainPrefix
+          - CertificateArn
       - Label:
           default: Amazon EC2 Configuration
         Parameters:
@@ -66,7 +68,6 @@ Metadata:
         Parameters:
           - QSS3BucketName
           - QSS3KeyPrefix
-          - OutputBucketName
     ParameterLabels:
       AmiId:
         default: AMI ID
@@ -116,8 +117,6 @@ Metadata:
         default: Number of Etcds
       NumberOfNodes:
         default: Number of Nodes
-      OutputBucketName:
-        default: Output S3 Bucket Name
       AWSServiceBroker:
         default: AWS Service Broker
       HawkularMetrics:
@@ -128,6 +127,8 @@ Metadata:
         default: Route 53 Hosted Zone ID
       SubDomainPrefix:
         default: Subdomain Prefix
+      CertificateArn:
+        default: Certificate ARN
       GlusterFS:
         default: GlusterFS
       GlusterStorageSize:
@@ -152,7 +153,16 @@ Metadata:
         default: Cluster Name
       ClusterConsole:
         default: Enable the cluster console (Requires OpenShift 3.11)
+      NumberOfAZs:
+        default: Number of Availability Zones
 Parameters:
+  NumberOfAZs:
+    Default: 3
+    Description: The number of Availability Zones to be used for the deployment. 3 Availability Zones are needed to avoid a single point of failure when using 3 or more master nodes or etcd nodes.  With less than 3 Availability Zones.
+    Type: Number
+    AllowedValues:
+    - 1
+    - 3
   AmiId:
     Description: >-
       OPTIONAL: bring your own AMI. In Enterprise environment, you might
@@ -262,9 +272,9 @@ Parameters:
     Type: String
   OpenshiftContainerPlatformVersion:
     Description: OpenShift version to deploy
-    Default: '3.11'
+    Default: '4.3'
     Type: String
-    AllowedValues: [ '3.11' ]
+    AllowedValues: [ '3.11', '4.3' ]
   VPCCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
@@ -374,11 +384,6 @@ Parameters:
     Default: '3'
     Description: The desired capacity for the OpenShift node instances
     Type: Number
-  OutputBucketName:
-    Description: 'OPTIONAL: Bucket Name where the zip file output should be placed,
-      if left blank a bucket name will be automatically generated.'
-    Type: String
-    Default: ''
   AWSServiceBroker:
     Default: Enabled
     Description: Enable the AWS Service Broker
@@ -401,6 +406,10 @@ Parameters:
     Description: 'OPTIONAL: Subdomain to use, if left blank DomainName will be used
       without a prefix. If you specify this you must also specify DomainName and HostedZoneID'
     Type: String
+  CertificateArn:
+    Description: 'OPTIONAL: Specify the arn of the certificate that will be presented.'
+    Type: String
+    Default: ""
   HawkularMetrics:
     Default: Enabled
     Description: Enable Hawkular cluster metrics
@@ -448,12 +457,12 @@ Parameters:
     Description: EBS volume IOPS to allocate (only applicable if io1 has been selected for GlusterStorageType)
     Type: Number
   GlusterStorageEncrypted:
-    Default: False
+    Default: 'False'
     Description: Enable EBS encryption for Gluster storage volumes
     Type: String
     AllowedValues:
-      - False
-      - True
+      - 'False'
+      - 'True'
   AutomationBroker:
     Default: Enabled
     Description: Enable the OpenShift Automation Service Broker
@@ -475,12 +484,38 @@ Parameters:
     Description: Enable the Cluster Console
     Type: String
     AllowedValues: [ Enabled, Disabled ]
-Conditions:
-  CustomClusterName: !Not
-    - !Equals
-      - !Ref ClusterName
-      - ""
+
 Resources:
+
+
+  OpenShiftPasswordSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      SecretString: !Ref OpenShiftAdminPassword
+
+  OpenShiftLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: 7
+
+  #
+  # Creates the DNS Zone and subdomain (if required)
+  #
+  DNSZoneStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: SetupSubdomain
+    Properties:
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/common/dns.template'
+      Parameters:
+        HostedZoneID: !Ref HostedZoneID
+        DomainName: !Ref DomainName
+        SubDomainPrefix: !Ref SubDomainPrefix
+
+  #
+  # Creates the VPC Network for the cluster
+  #
   VPCStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -492,71 +527,332 @@ Resources:
         PrivateSubnet1ACIDR: !Ref 'PrivateSubnet1CIDR'
         PrivateSubnet2ACIDR: !Ref 'PrivateSubnet2CIDR'
         PrivateSubnet3ACIDR: !Ref 'PrivateSubnet3CIDR'
-        PrivateSubnetATag2: !Sub "kubernetes.io/cluster/${AWS::StackName}-${AWS::Region}=owned"
+        PrivateSubnetATag2: !If
+          - CustomClusterName
+          - !Sub "kubernetes.io/cluster/${ClusterName}=owned"
+          - !Sub "kubernetes.io/cluster/${AWS::StackName}-${AWS::Region}=owned"
         PrivateSubnetATag3: "kubernetes.io/role/internal-elb="
         PublicSubnet1CIDR: !Ref 'PublicSubnet1CIDR'
         PublicSubnet2CIDR: !Ref 'PublicSubnet2CIDR'
         PublicSubnet3CIDR: !Ref 'PublicSubnet3CIDR'
-        PublicSubnetTag2: !Sub "kubernetes.io/cluster/${AWS::StackName}-${AWS::Region}=owned"
+        PublicSubnetTag2: !If
+          - CustomClusterName
+          - !Sub "kubernetes.io/cluster/${ClusterName}=owned"
+          - !Sub "kubernetes.io/cluster/${AWS::StackName}-${AWS::Region}=owned"
         PublicSubnetTag3: "kubernetes.io/role/elb="
         VPCCIDR: !Ref 'VPCCIDR'
-  OpenShiftStack:
+
+
+  #
+  # SSL Certificate management
+  #
+  # Either created through ACM or bring your own ARN
+
+  SSLCertificateStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift.template'
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/common/ssl_certificate.template'
       Parameters:
-        NumberOfAZs: '3'
-        MasterInstanceType: !Ref 'MasterInstanceType'
-        NodesInstanceType: !Ref 'NodesInstanceType'
-        EtcdInstanceType: !Ref 'EtcdInstanceType'
-        NumberOfMaster: !Ref 'NumberOfMaster'
-        NumberOfEtcd: !Ref 'NumberOfEtcd'
-        NumberOfNodes: !Ref 'NumberOfNodes'
-        AnsibleStorageSize: '10'
-        KeyPairName: !Ref 'KeyPairName'
+        Route53HostedSubdomainZone: !If
+          - SetupSubdomain
+          - !GetAtt DNSZoneStack.Outputs.Route53HostedSubdomainZone
+          - !Ref HostedZoneID
+        ACMCertificateLambdaArn: !If
+          - SetupRoute53
+          - !GetAtt CustomLambdaStack.Outputs.ACMCertificateLambdaArn
+          - ""
+        HostedZoneID: !Ref HostedZoneID
+        CertificateArn: !Ref CertificateArn
+        DomainName: !Ref DomainName
+        SubDomainPrefix: !Ref SubDomainPrefix
+
+  #
+  # Custom Resource definitions
+  #
+  CustomLambdaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/common/custom_lambda.template'
+      Parameters:
+        HostedZoneID: !Ref HostedZoneID
+        Route53HostedSubdomainZone: !If
+          - SetupSubdomain
+          - !GetAtt DNSZoneStack.Outputs.Route53HostedSubdomainZone
+          - !Ref HostedZoneID
+        DomainName: !Ref DomainName
+        SubDomainPrefix: !Ref SubDomainPrefix
+        RegistryBucket: !If
+          - OS3
+          - !Ref RegistryBucket
+          - ""
+        QSS3BucketName: !Ref QSS3BucketName
+        QSS3KeyPrefix: !Ref QSS3KeyPrefix
+
+  LoadBalancerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/common/loadbalancer.template'
+      Parameters:
+        VPCID: !GetAtt 'VPCStack.Outputs.VPCID'
+        VPCCIDR: !Ref 'VPCCIDR'
+        HostedZoneID: !If
+          - SetupSubdomain
+          - !GetAtt DNSZoneStack.Outputs.Route53HostedSubdomainZone
+          - !Ref 'HostedZoneID'
+        DomainName: !Join
+          - ''
+          - - !If
+              - SetupSubdomain
+              - !Sub '${SubDomainPrefix}.'
+              - ''
+            - !Ref 'DomainName'
         PrivateSubnet1ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet1AID'
         PrivateSubnet2ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet2AID'
         PrivateSubnet3ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet3AID'
         PublicSubnet1ID: !GetAtt 'VPCStack.Outputs.PublicSubnet1ID'
         PublicSubnet2ID: !GetAtt 'VPCStack.Outputs.PublicSubnet2ID'
         PublicSubnet3ID: !GetAtt 'VPCStack.Outputs.PublicSubnet3ID'
-        RemoteAccessCIDR: !Ref 'RemoteAccessCIDR'
-        ContainerAccessCIDR: !Ref 'ContainerAccessCIDR'
+        RemoteAccessCIDR: !Ref RemoteAccessCIDR
+        ContainerAccessCIDR: !Ref ContainerAccessCIDR
+        Protocol: !If
+          - UseCustomDomain
+          - SSL
+          - TCP
+        NumberOfAZs: 3
+        ClusterName: !If
+          - CustomClusterName
+          - !Ref ClusterName
+          - !Sub '${AWS::StackName}-${AWS::Region}'
+        SSLCertificateId: !If
+          - UseCustomDomain
+          - !If
+            - UseCustomCertificate
+            - !Ref 'CertificateArn'
+            - !If
+              - SetupRoute53
+              - !GetAtt SSLCertificateStack.Outputs.ACMCertificateDNSArn
+              - !GetAtt SSLCertificateStack.Outputs.ACMCertificateEmail
+          - !Ref AWS::NoValue
+
+            #  OpenShiftStack4:
+            #    Type: AWS::CloudFormation::Stack
+            #    Condition: OS4
+            #    Properties:
+            #      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift-4.template'
+            #      Parameters:
+            #        VPCID: !GetAtt 'VPCStack.Outputs.VPCID'
+            #        VPCCIDR: !Ref 'VPCCIDR'
+            #        SubnetId: !GetAtt 'VPCStack.Outputs.PublicSubnet1ID'
+            #
+            #        OpenShiftVersion: !Ref OpenshiftContainerPlatformVersion
+            #        SSHKey: !Ref 'KeyPairName'
+            #
+            #        HostedZoneName: !Ref 'HostedZoneID'
+            #
+            #        RemoteAccessCIDR: !Ref 'RemoteAccessCIDR'
+            #
+            #        MasterStack: !Ref AWS::StackName
+            #        ClusterName: !If
+            #        - CustomClusterName
+            #        - !Ref ClusterName
+            #        - !Sub '${AWS::StackName}-${AWS::Region}'
+            #
+            #        QSS3BucketName: !Ref 'QSS3BucketName'
+            #        QSS3KeyPrefix: !Ref 'QSS3KeyPrefix'
+
+        #  OpenShiftStack-4:
+        #    Type: AWS::CloudFormation::Stack
+        #    Condition: OS4
+        #    Properties:
+        #      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift-4.template'
+        #      Type: Custom::LambdaDeployCF
+        #      Function: DeployCF
+        #      ServiceToken: !GetAtt LambdaStack.Outputs.StackDirectorLambdaArn
+        #      StackName: !Ref ClusterName
+        #      NumberOfAZs: '3'
+        #      PrivateSubnet1ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet1AID'
+        #      PrivateSubnet2ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet2AID'
+        #      PrivateSubnet3ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet3AID'
+        #      PublicSubnet1ID: !GetAtt 'VPCStack.Outputs.PublicSubnet1ID'
+        #      PublicSubnet2ID: !GetAtt 'VPCStack.Outputs.PublicSubnet2ID'
+        #      PublicSubnet3ID: !GetAtt 'VPCStack.Outputs.PublicSubnet3ID'
+        #      KeyPairName: !Ref 'KeyPairName'
+        #      RemoteAccessCIDR: !Ref 'RemoteAccessCIDR'
+        #      ContainerAccessCIDR: !Ref 'ContainerAccessCIDR'
+        #      QSS3BucketName: !Ref 'QSS3BucketName'
+        #      QSS3KeyPrefix: !Ref 'QSS3KeyPrefix'
+        #      OpenShiftAdminPassword: !Ref 'OpenShiftAdminPassword'
+        #      RedhatSubscriptionUserName: !Ref 'RedhatSubscriptionUserName'
+        #      RedhatSubscriptionPassword: !Ref 'RedhatSubscriptionPassword'
+        #      RedhatSubscriptionPoolID: !Ref 'RedhatSubscriptionPoolID'
+        #      OutputBucketName: !Ref 'OutputBucketName'
+        #      VPCCIDR: !Ref 'VPCCIDR'
+        #      VPCID: !GetAtt 'VPCStack.Outputs.VPCID'
+        #      OpenshiftContainerPlatformVersion: !Ref 'OpenshiftContainerPlatformVersion'
+        #      AWSServiceBroker: !Ref 'AWSServiceBroker'
+        #      HostedZoneID: !Ref 'HostedZoneID'
+        #      DomainName: !Ref 'DomainName'
+        #      SubDomainPrefix: !Ref 'SubDomainPrefix'
+        #      HawkularMetrics: !Ref 'HawkularMetrics'
+        #      AnsibleFromGit: !Ref 'AnsibleFromGit'
+        #      ClusterName: !If
+        #      - CustomClusterName
+        #      - !Ref ClusterName
+        #      - !Sub '${AWS::StackName}-${AWS::Region}'
+        #      GlusterStorageEncrypted: !Ref GlusterStorageEncrypted
+        #      GlusterStorageIops: !Ref GlusterStorageIops
+        #      NumberOfGluster: !Ref NumberOfGluster
+        #      GlusterInstanceType: !Ref GlusterInstanceType
+        #      GlusterStorageType: !Ref GlusterStorageType
+        #      GlusterStorageSize: !Ref GlusterStorageSize
+        #      GlusterFS: !Ref GlusterFS
+        #      AutomationBroker: !Ref AutomationBroker
+        #      AmiId: !Ref AmiId
+        #      ClusterConsole: !Ref ClusterConsole
+        #      MasterInstanceType: !Ref 'MasterInstanceType'
+        #      NodesInstanceType: !Ref 'NodesInstanceType'
+        #      EtcdInstanceType: !Ref 'EtcdInstanceType'
+        #      NumberOfMaster: !Ref 'NumberOfMaster'
+        #      NumberOfEtcd: !Ref 'NumberOfEtcd'
+        #      NumberOfNodes: !Ref 'NumberOfNodes'
+
+
+  #
+  # OpenShift 3 Specific Stacks + Resources
+  #
+  #
+  # Create the Cluster and manage scaling events
+  #
+  RegistryBucket:
+    Type: "AWS::S3::Bucket"
+    Condition: OS3
+
+  OpenShift3:
+    Type: AWS::CloudFormation::Stack
+    Condition: OS3
+    Properties:
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift-3.template'
+      Parameters:
+        # Cluster Management
+        AnsibleStorageSize: '10'
+        AnsibleFromGit: !Ref 'AnsibleFromGit'
+        KeyPairName: !Ref 'KeyPairName'
+        AnsibleSubnetID: !GetAtt 'VPCStack.Outputs.PublicSubnet1ID'
         QSS3BucketName: !Ref 'QSS3BucketName'
         QSS3KeyPrefix: !Ref 'QSS3KeyPrefix'
-        OpenShiftAdminPassword: !Ref 'OpenShiftAdminPassword'
         RedhatSubscriptionUserName: !Ref 'RedhatSubscriptionUserName'
         RedhatSubscriptionPassword: !Ref 'RedhatSubscriptionPassword'
         RedhatSubscriptionPoolID: !Ref 'RedhatSubscriptionPoolID'
-        OutputBucketName: !Ref 'OutputBucketName'
-        VPCCIDR: !Ref 'VPCCIDR'
-        VPCID: !GetAtt 'VPCStack.Outputs.VPCID'
+        NumberOfAZs: !Ref NumberOfAZs
+
+        # Cluster Config
         OpenshiftContainerPlatformVersion: !Ref 'OpenshiftContainerPlatformVersion'
-        AWSServiceBroker: !Ref 'AWSServiceBroker'
-        HostedZoneID: !Ref 'HostedZoneID'
-        DomainName: !Ref 'DomainName'
-        SubDomainPrefix: !Ref 'SubDomainPrefix'
-        HawkularMetrics: !Ref 'HawkularMetrics'
-        AnsibleFromGit: !Ref 'AnsibleFromGit'
+        AmiId: !Ref AmiId
+        NumberOfMaster: !Ref NumberOfMaster
+        NumberOfEtcd: !Ref NumberOfEtcd
+        NumberOfNodes: !Ref NumberOfNodes
+        NumberOfGluster: !Ref NumberOfGluster
+        MasterInstanceType: !Ref 'MasterInstanceType'
+        NodesInstanceType: !Ref 'NodesInstanceType'
+        EtcdInstanceType: !Ref 'EtcdInstanceType'
         ClusterName: !If
         - CustomClusterName
         - !Ref ClusterName
         - !Sub '${AWS::StackName}-${AWS::Region}'
         GlusterStorageEncrypted: !Ref GlusterStorageEncrypted
         GlusterStorageIops: !Ref GlusterStorageIops
-        NumberOfGluster: !Ref NumberOfGluster
         GlusterInstanceType: !Ref GlusterInstanceType
         GlusterStorageType: !Ref GlusterStorageType
         GlusterStorageSize: !Ref GlusterStorageSize
         GlusterFS: !Ref GlusterFS
         AutomationBroker: !Ref AutomationBroker
-        AmiId: !Ref AmiId
         ClusterConsole: !Ref ClusterConsole
+        AWSServiceBroker: !Ref 'AWSServiceBroker'
+        RegistryBucket: !Ref RegistryBucket
+        RegistryBucketArn: !GetAtt RegistryBucket.Arn
+
+        # Network Configuration
+        OpenShiftSecurityGroup: !GetAtt LoadBalancerStack.Outputs.OpenShiftSecurityGroup
+        OpenShiftMasterELB: !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterELB
+        ContainerAccessELBDNSName: !GetAtt LoadBalancerStack.Outputs.ContainerAccessELBDNSName
+        OpenShiftMasterInternalELBDNSName: !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterInternalELBDNSName
+        OpenShiftMasterInternalELB: !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterInternalELB
+        ContainerAccessELB: !GetAtt LoadBalancerStack.Outputs.ContainerAccessELB
+        OpenShiftMasterInternalELBTargetGroup: !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterInternalELBTargetGroup
+        LoadBalancerHostname: !If [ UseCustomDomain, !If [ UseSubdomain, !Sub "${SubDomainPrefix}.${DomainName}", !Ref "DomainName" ], !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterELBDNSName ]
+        PrivateSubnet1ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet1AID'
+        PrivateSubnet2ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet2AID'
+        PrivateSubnet3ID: !GetAtt 'VPCStack.Outputs.PrivateSubnet3AID'
+        VPCID: !GetAtt 'VPCStack.Outputs.VPCID'
+
+        # Custom Resource Lambdas
+        KeyGenLambdaArn: !GetAtt CustomLambdaStack.Outputs.KeyGenLambdaArn
+        DeleteBucketContentsLambdaArn: !GetAtt CustomLambdaStack.Outputs.DeleteBucketContentsLambdaArn
+        UnSubscribeLambdaArn: !GetAtt CustomLambdaStack.Outputs.UnSubscribeLambdaArn
+        CleanupPVLambdaArn: !GetAtt CustomLambdaStack.Outputs.CleanupPVLambdaArn
+
+        # OpenShift Config
+        OpenShiftPasswordSecret: !Ref OpenShiftPasswordSecret
+
+        # Monitoring
+        HawkularMetrics: !Ref 'HawkularMetrics'
+        OpenShiftLogGroup: !Ref OpenShiftLogGroup
+
+Conditions:
+  UseSubdomain: !Not
+    - !Equals
+      - !Ref 'SubDomainPrefix'
+      - ''
+  CustomClusterName: !Not
+    - !Equals
+      - !Ref ClusterName
+      - ""
+  OS4:
+    !Or [ !Equals [!Ref OpenshiftContainerPlatformVersion, '4.2'], !Equals [!Ref OpenshiftContainerPlatformVersion, '4.3']]
+  OS3: !Equals [!Ref OpenshiftContainerPlatformVersion, '3.11']
+
+  UseCustomDomain: !Not
+    - !Equals
+      - !Ref 'DomainName'
+      - ''
+
+  UseCustomCertificate: !Not
+    - !Equals
+      - !Ref 'CertificateArn'
+      - ''
+
+  SetupRoute53: !And
+    - !Not
+      - !Equals
+        - !Ref 'HostedZoneID'
+        - ''
+    - !Not
+      - !Equals
+        - !Ref 'DomainName'
+        - ''
+  SetupSubdomain: !And
+    - !Not
+      - !Equals
+        - !Ref 'SubDomainPrefix'
+        - ''
+    - !Not
+      - !Equals
+        - !Ref 'HostedZoneID'
+        - ''
+    - !Not
+      - !Equals
+        - !Ref 'DomainName'
+        - ''
+
 
 Outputs:
   OpenShiftUI:
     Description: The URL OpenShiftUI
-    Value: !GetAtt 'OpenShiftStack.Outputs.OpenShiftUI'
+    Value: !Join
+      - ''
+      - - https://
+        - !If [ UseCustomDomain, !If [ UseSubdomain, !Sub "${SubDomainPrefix}.${DomainName}", !Ref "DomainName" ], !GetAtt LoadBalancerStack.Outputs.OpenShiftMasterELBDNSName ]
+
   ContainerAccessELBName:
     Description: Use this ELB to expose ports to the internet
-    Value: !GetAtt 'OpenShiftStack.Outputs.ContainerAccessELBName'
+    Value: !GetAtt LoadBalancerStack.Outputs.ContainerAccessELB

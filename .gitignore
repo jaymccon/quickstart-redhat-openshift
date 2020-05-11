@@ -1,0 +1,7 @@
+
+# Taskcat
+.taskcat.yml
+.taskcat_overrides.yml
+taskcat_outputs
+
+# Lambda

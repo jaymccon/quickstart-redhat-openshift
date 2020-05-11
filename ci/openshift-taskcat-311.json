@@ -24,11 +24,19 @@
         "ParameterValue": "override"
     },
     {
-        "ParameterKey": "RedhatPullSecret",
+        "ParameterKey": "RedhatSubscriptionPassword",
         "ParameterValue": "override"
     },
     {
-        "ParameterValue": "4.3",
+        "ParameterKey": "RedhatSubscriptionUserName",
+        "ParameterValue": "override"
+    },
+    {
+        "ParameterKey": "RedhatSubscriptionPoolID",
+        "ParameterValue": "override"
+    },
+    {
+        "ParameterValue": "3.11",
         "ParameterKey": "OpenshiftContainerPlatformVersion"
     },
     {
