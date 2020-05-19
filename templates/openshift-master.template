@@ -731,7 +731,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Condition: OS3
     Properties:
-      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift-3.template'
+      TemplateURL: !Sub 'https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/openshift3/os3.template'
       Parameters:
         # Cluster Management
         AnsibleStorageSize: '10'
