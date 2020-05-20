@@ -275,7 +275,7 @@ Resources:
       Name: !Join [".", ["etcd-0", !Ref InfrastructureName, !Ref HostedZoneName]]
       ResourceRecords:
       - !GetAtt Instance.PrivateIp
-      TTL: "60"
+      TTL: 60
       Type: A
 
   EtcdSrvRecords:
@@ -289,7 +289,7 @@ Resources:
         " ",
         ["0 10 2380", !Join [".", ["etcd-0", !Ref InfrastructureName, !Ref HostedZoneName]]],
       ]
-      TTL: "60"
+      TTL: 60
       Type: SRV
 Outputs:
   InstanceId:

@@ -231,7 +231,7 @@ Resources:
   RegisterTargetLambdaIamRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ["-", [!Ref InfrastructureName, "nlb", "lambda", "role"]]
+      RoleName: !Join ["-", [!Ref ClusterName, "nlb", "lambda", "role"]]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -243,7 +243,7 @@ Resources:
           - "sts:AssumeRole"
       Path: "/"
       Policies:
-      - PolicyName: !Join ["-", [!Ref InfrastructureName, "master", "policy"]]
+      - PolicyName: !Join ["-", [!Ref ClusterName, "master", "policy"]]
         PolicyDocument:
           Version: "2012-10-17"
           Statement:

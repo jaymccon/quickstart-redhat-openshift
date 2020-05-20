@@ -12,7 +12,7 @@ controlPlane:
   replicas: 1
 metadata:
   creationTimestamp: null
-  name: {{ your clustername }}
+  name: your_clustername
 networking:
   clusterNetwork:
   - cidr: 10.32.0.0/16
