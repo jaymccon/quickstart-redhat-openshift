@@ -368,6 +368,9 @@ Outputs:
   ApiServerDnsName:
     Description: Full hostname of the API server, which is required for the Ignition config files.
     Value: !Join [".", ["api-int", !Ref ClusterName, !Ref HostedZoneName]]
+  ExtApiServerDnsName:
+    Description: Full hostname of the API server, which is required for the Ignition config files.
+    Value: !Join [".", ["api", !Ref ClusterName, !Ref HostedZoneName]]
   RegisterNlbIpTargetsLambda:
     Description: Lambda ARN useful to help register or deregister IP targets for these load balancers.
     Value: !GetAtt RegisterNlbIpTargets.Arn

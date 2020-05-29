@@ -993,8 +993,13 @@ Outputs:
 
   OpenShiftUI:
     Description: The URL OpenShiftUI
-    Condition: OS3
-    Value: !GetAtt OpenShift3.Outputs.OpenShiftUI
+    Value: !If
+      - OS3
+      - !GetAtt OpenShift3.Outputs.OpenShiftUI
+      - !If
+        - OS4
+        - !GetAtt OpenShift4.Outputs.OpenShiftUI
+        - ""
 
   ContainerAccessELBName:
     Condition: OS3

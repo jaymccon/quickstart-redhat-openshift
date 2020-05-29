@@ -784,6 +784,15 @@ Mappings:
 
 Outputs:
 
+  OpenShiftUI:
+    Description: The URL OpenShiftUI
+    Value: !Join
+      - ''
+      - - https://
+        - !GetAtt NetworkStack.Outputs.ExtApiServerDnsName
+        - ':6443'
+
+
   KubeAdminPassword:
     Value: !Ref OpenShiftPasswordSecret
     Description: Location in AWS Secrets Manager for the Open Shift Admin password
