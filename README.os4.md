@@ -90,8 +90,9 @@ This process was tested 05-27
 - [ ] Allow users to select number of Master nodes at install
 - [ ] Allow users to select number of Worker nodes at install
 - [ ] Custom resource provider for OPenshift4 installer
-- [ ] Test some Helm Custom resources
+- [ ] Create AWS Secret in Openshift4 installer. Fetches Kubeconfig
 - [ ] Known Bug: the first time we request a certificate for a new subdomain /
   clustername, the `*.apps` wildcard validation CNAME DNS record doesn't get created. no errors?
 - [x] Be more efficient with Custom Lambdas Stack -- not all the functions need to be created for OS4
+- [x] Test some Helm Custom resources
 - [ ] Delete Openshift resources on delete events: IntDNS records, Security Groups, Loadbalancers -- all findable by Tags
