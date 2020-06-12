@@ -757,8 +757,6 @@ Resources:
         MasterInstanceProfileName: !Ref MasterInstanceProfileName
         WorkerInstanceProfileName: !Ref WorkerInstanceProfileName
 
-        # TODO: these do not get set on the actual installation
-        NumberOfMaster: !Ref NumberOfMaster
         NumberOfNodes: !Ref NumberOfNodes
 
         MasterInstanceType: !Ref 'MasterInstanceType'
@@ -826,10 +824,6 @@ Resources:
         AvailabilityZones: !Join
           - ","
           - !Ref AvailabilityZones
-
-        # Custom Resources
-        CopyZipsFunctionArn: !GetAtt CustomLambdaStack.Outputs.CopyZipsArn
-        LambdaZipsBucket: !GetAtt CustomLambdaStack.Outputs.LambdaZipsBucket
 
 
   OpenShift3:
