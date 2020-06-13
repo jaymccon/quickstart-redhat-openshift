@@ -16,7 +16,8 @@ from botocore.exceptions import ClientError
 # Use this logger to forward log messages to CloudWatch Logs.
 from cloudformation_cli_python_lib import SessionProxy, OperationStatus
 
-from awsqs_openshift_manager.models import ResourceModel
+from .models import ResourceModel
+from .openshift import fetch_ingress_info, fetch_openshift_binary
 
 LOG = logging.getLogger(__name__)
 log = LOG  # alias
@@ -74,7 +75,35 @@ def fetch_resource(model: Optional[ResourceModel], session: Optional[SessionProx
                 'resourceModel': model
             }
         LOG.warning('WARNING - KubeAdminPassword not required for BOOTSTRAP action. Continuing...')
+
+    log.info('Reading Ingress information from Cluster')
+    openshift_client_binary = model.OpenShiftClientBinary
+    openshift_version = model.OpenShiftVersion
+    openshift_client_mirror_url = f'{model.OpenShiftMirrorURL}{openshift_version}/'
+    openshift_client_package = f'openshift-client-linux-{openshift_version}.tar.gz'
+    fetch_openshift_binary(openshift_client_mirror_url, openshift_client_package, openshift_client_binary, '/tmp/')
+    oc_bin = f'/tmp/{openshift_client_binary}'
+
+    kubeconfig_path = write_kubeconfig(session, model.KubeConfigArn)
+    model.IngressZoneId, model.IngressDNS = fetch_ingress_info(oc_bin, kubeconfig_path, session)
     return {'status': OperationStatus.SUCCESS, 'resourceModel': model}
+
+
+def write_kubeconfig(session, kubeconfig_id, parent_dir='/tmp/'):
+    """
+    Fetches kubeconfig from secrets manager and writes to file
+
+    :param session:  Boto3 session
+    :param parent_dir: where to install kubeconfig file
+    :return str: Path to kubeconfig
+    """
+    LOG.debug('[CREATE] Fetching KubeConfig from Secrets Manager at %s', kubeconfig_id)
+    secrets = session.client('secretsmanager')
+    kubeconfig_path = os.path.join('/tmp/', 'kubeconfig')
+    kubeconfig = secrets.get_secret_value(SecretId=kubeconfig_id)
+    with open(kubeconfig_path, 'w') as f:
+        f.write(kubeconfig['SecretString'])
+    return kubeconfig_path
 
 
 def verify_sha256sum(filename, sha256sum):

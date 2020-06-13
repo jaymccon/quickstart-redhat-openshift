@@ -8,8 +8,8 @@ from typing import Optional, Mapping
 
 from cloudformation_cli_python_lib import OperationStatus, SessionProxy
 
-from .util import upload_ignition_files_to_s3, fetch_resource
-from .openshift import bootstrap_post_process, cluster_api_available, wait_for_operators
+from .util import upload_ignition_files_to_s3, fetch_resource, write_kubeconfig
+from .openshift import fetch_ingress_info, cluster_api_available, wait_for_operators, bootstrap_post_process
 from .openshift import fetch_openshift_binary, generate_ignition_files
 from .models import ResourceModel
 
@@ -43,6 +43,7 @@ def generate_ignition_create(model: Optional[ResourceModel], session: Optional[S
         model.ClusterName, model.SSHKey, model.PullSecret,
         model.HostedZoneName, model.Subnets, model.AvailabilityZones,
         model.AwsAccessKeyId, model.AwsSecretAccessKey,
+        certificate_arn=model.CertificateArn,
         worker_instance_profile=model.WorkerInstanceProfileName,
         worker_node_size=model.WorkerNodeSize
     )
@@ -131,15 +132,8 @@ def bootstrap_create(model: ResourceModel, stage: str, start_time: float, sessio
     }
 
     oc_bin = f'/tmp/{openshift_client_binary}'
-    kubeconfig_path = os.path.join('/tmp/', 'kubeconfig')
-    if stage in ["INIT", "WAIT_FOR_INIT", "WAIT_FOR_CLUSTER_OPERATORS", "POST_PROCESS"]:
-        fetch_openshift_binary(openshift_client_mirror_url, openshift_client_package, openshift_client_binary, '/tmp/')
-        client = session.client('secretsmanager')
-        LOG.debug('[CREATE] Fetching KubeConfig from Secrets Manager at %s', model.KubeConfig)
-        kubeconfig = client.get_secret_value(SecretId=model.KubeConfig)
-        LOG.debug('[CREATE] Writing KubeConfig to file')
-        with open(kubeconfig_path, 'w') as f:
-            f.write(kubeconfig['SecretString'])
+    kubeconfig_path = write_kubeconfig(session, model.KubeConfig)
+    fetch_openshift_binary(openshift_client_mirror_url, openshift_client_package, openshift_client_binary, '/tmp/')
 
     if stage is None:
         LOG.info('[CREATE] Returning IN_PROGRESS response. Next stage is WAIT_FOR_INIT')
@@ -152,7 +146,8 @@ def bootstrap_create(model: ResourceModel, stage: str, start_time: float, sessio
 
     elif stage == "WAIT_FOR_INIT":
         if cluster_api_available(oc_bin, kubeconfig_path):
-            next_stage = 'CLUSTER_INIT_SUCCESS'
+            LOG.info('[CREATE] Cluster API is available. Time Elapsed: %s', _readable_time_delta(time_elapsed))
+            next_stage = 'WAIT_FOR_CLUSTER_OPERATORS'
             delay = 0
         else:
             next_stage = 'WAIT_FOR_INIT'
@@ -162,17 +157,11 @@ def bootstrap_create(model: ResourceModel, stage: str, start_time: float, sessio
             "callbackContext": {"stage": next_stage, "start_time": start_time},
             "callbackDelaySeconds": delay
         }}
-    elif stage == "CLUSTER_INIT_SUCCESS":
-        LOG.info('[CREATE] Cluster API is available. Time Elapsed: %s', _readable_time_delta(time_elapsed))
-        return {**default_response, **{
-            "message": "Cluster API initialized successfully. Waiting for Operators to come online...",
-            "callbackContext": {"stage": "WAIT_FOR_CLUSTER_OPERATORS", "start_time": start_time},
-            "callbackDelaySeconds": 0
-        }}
     elif stage == "WAIT_FOR_CLUSTER_OPERATORS":
         if wait_for_operators(oc_bin, kubeconfig_path):
+            LOG.info('[CREATE] Cluster Operators are available. Time Elapsed: %s', _readable_time_delta(time_elapsed))
             delay = 0
-            next_stage = 'CLUSTER_OPERATORS_SUCCESS'
+            next_stage = 'POST_PROCESS'
         else:
             delay = 300
             next_stage = 'WAIT_FOR_CLUSTER_OPERATORS'
@@ -181,21 +170,14 @@ def bootstrap_create(model: ResourceModel, stage: str, start_time: float, sessio
             "callbackContext": {"stage": next_stage, "start_time": start_time},
             "callbackDelaySeconds": delay
         }}
-    elif stage == "CLUSTER_OPERATORS_SUCCESS":
-        LOG.info('[CREATE] Cluster Operators are available. Time Elapsed: %s', _readable_time_delta(time_elapsed))
-        return {**default_response, **{
-            "message": "Cluster Operators are all Healthy",
-            "callbackContext": {"stage": "POST_PROCESS", "start_time": start_time},
-            "callbackDelaySeconds": 0
-        }}
     elif stage == "POST_PROCESS":
-        if bootstrap_post_process(oc_bin, kubeconfig_path, cert_arn=model.CertificateArn):
-            return {
-                "status": OperationStatus.SUCCESS,
-                "message": "Cluster successfully bootstrapped and ready for operations",
-            }
-        else:
-            raise RuntimeError("Post process failed")
+        model.IngressZoneId, model.IngressDNS = fetch_ingress_info(oc_bin, kubeconfig_path)
+        bootstrap_post_process(oc_bin, kubeconfig_path, model.CertificateArn)
+        return {
+            "status": OperationStatus.SUCCESS,
+            "resourceModel": model,
+            "message": "Cluster successfully bootstrapped and ready for operations",
+        }
 
     raise AttributeError("Unknown Stage: %s", stage)
 

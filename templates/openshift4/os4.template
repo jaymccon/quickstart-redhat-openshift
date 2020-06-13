@@ -433,7 +433,7 @@ Resources:
       AwsAccessKeyId: !Ref OpenShift4ClusterManagerAccessKeys
       AwsSecretAccessKey: !GetAtt OpenShift4ClusterManagerAccessKeys.SecretAccessKey
       WorkerInstanceProfileName: !Ref WorkerInstanceProfileName
-      #CertificateArn: !Ref SSLCertificateId
+      CertificateArn: !Ref SSLCertificateId
       PullSecret: !Ref PullSecret
       OpenShiftMirrorURL: !Ref OpenShiftMirrorURL
       OpenShiftClientBinary: !Ref OpenShiftClientBinary
@@ -448,6 +448,7 @@ Resources:
       ClusterName: !Ref ClusterName
       HostedZoneName: !Ref HostedZoneName
       LogLevel: !Ref LogLevel
+      CertificateArn: !Ref SSLCertificateId
 
   #
   # Sets up Networking
@@ -587,6 +588,40 @@ Resources:
         WorkerInstanceProfileName: !GetAtt 'SecurityStack.Outputs.WorkerInstanceProfile'
         WorkerSecurityGroupId: !GetAtt 'SecurityStack.Outputs.MasterSecurityGroupId'
 
+  ExternalAppsServerRecord:
+    Condition: HasACMCertificate
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Alias record for the Apps ingress
+      HostedZoneId: !Ref HostedZoneID
+      RecordSets:
+        - Name:
+            !Join [
+              ".",
+              ["*", "apps", !Ref ClusterName, !Join ["", [!Ref HostedZoneName, "."]]],
+            ]
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt OpenShiftBootstrap.IngressZoneId
+            DNSName: !GetAtt OpenShiftBootstrap.IngressDNS
+
+  InternalAppsServerRecord:
+    Condition: HasACMCertificate
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Alias record for the Apps ingress
+      HostedZoneId: !GetAtt NetworkStack.Outputs.PrivateHostedZoneId
+      RecordSets:
+        - Name:
+            !Join [
+              ".",
+              ["*", "apps", !Ref ClusterName, !Join ["", [!Ref HostedZoneName, "."]]],
+            ]
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt OpenShiftBootstrap.IngressZoneId
+            DNSName: !GetAtt OpenShiftBootstrap.IngressDNS
+
 Conditions:
     NoRhcosAmiParameter:
       Fn::Equals:
@@ -595,6 +630,11 @@ Conditions:
     IsBootstrapEnabled: !Equals
       - !Ref EnableBootstrap
       - 'yes'
+
+    HasACMCertificate: !Not
+      - !Equals
+        - !Ref SSLCertificateId
+        - ""
 
 Mappings:
   NoDotVersion:

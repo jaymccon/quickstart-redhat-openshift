@@ -1,18 +1,17 @@
 import glob
 import re
+import time
 import subprocess
-import sys
 import tarfile
 import json
 import logging
 import os
-from typing import Mapping
+from typing import Tuple
 
 from ruamel import yaml
-from cloudformation_cli_python_lib import exceptions, OperationStatus
 
 # Use this logger to forward log messages to CloudWatch Logs.
-from .util import run_process, url_retreive, parse_sha256sum_file, verify_sha256sum, upload_ignition_files_to_s3
+from .util import run_process, url_retreive, parse_sha256sum_file, verify_sha256sum
 
 LOG = logging.getLogger(__name__)
 log = LOG
@@ -109,11 +108,17 @@ def generate_ignition_files(openshift_install_binary, download_path, cluster_nam
             os.remove(manifest)
 
         if certificate_arn:
-            log.info('Customizing TLS settings to allow the ELB ingress to connect')
-            # TODO: Handle Certificate ARN
-            raise NotImplementedError("Providing a certificate ARN is not supported yet")
+            log.info('Customizing installation settings because a Certificate ARN was supplied')
+            dns_manifest = os.path.join(assets_directory, 'manifests', 'cluster-dns-02-config.yml')
+            with open(dns_manifest, 'r') as f:
+                dns_manifest_yaml = yaml.safe_load(f)
+            del dns_manifest_yaml['spec']['privateZone']
+            del dns_manifest_yaml['spec']['publicZone']
+            with open(dns_manifest, 'w') as f:
+                yaml.dump(dns_manifest_yaml, f, explicit_start=True, default_style='\"', width=4096)
+            log.info('Disabled OpenShift management of DNS records')
         else:
-            log.info('No custom SSL Certificate provided. Using default Cluster Certificate')
+            log.info('No custom SSL Certificate provided. Using default behavior and OpenShift will manage DNS')
 
         if worker_instance_profile:
             log.info('Customizing Worker IAM Instance Profile')
@@ -227,7 +232,7 @@ def cluster_api_available(oc: str, kubeconfig_path: str) -> bool:
     :return bool: True if API available. False, otherwise
     """
     try:
-        p = run_process(f'{oc} --config {kubeconfig_path} cluster-info')
+        run_process(f'{oc} --config {kubeconfig_path} cluster-info')
         log.info('Cluster is available for connections')
         return True
     except (subprocess.CalledProcessError, OSError):
@@ -270,23 +275,64 @@ def wait_for_operators(oc: str, kubeconfig_path: str) -> bool:
         return False
 
 
-def bootstrap_post_process(oc, kubeconfig_path, cert_arn=None) -> bool:
+def fetch_ingress_info(oc, kubeconfig_path, session):
     """
-    Execute any post-bootstrap steps
+    Fetches the Hosted Zone ID for the Ingress LoadBalancer
 
+    :param session: Boto3 session
     :param oc: The OpenShift Client binary
     :param kubeconfig_path: Path to a KubeConfig file for the cluster
     :return bool: True if the cluster is healthy. False, otherwise
     :param cert_arn: An ACM ARN for an *.apps certificate
     :return bool:  True if post processing is successful. False, otherwise
     """
+    ingress_service_re = re.compile(
+        r'^(?P<name>\S+)\s+(?P<typ>\S+)\s+(?P<cluster_ip>\S+)\s+(?P<external_ip>\S+)\s+(?P<ports>\S+)')
+    default_router_service = run_process(
+        f'{oc} --config {kubeconfig_path} -n openshift-ingress get service router-default').stdout.splitlines()[1]
+    elb = session.client('elbv2')
+
+    router_service_match = ingress_service_re.match(default_router_service)
+    if router_service_match is None:
+        log.error("ERROR - Could not find default ingress router service. Can not patch service to use Certificate")
+        raise RuntimeError("Could not find default ingress router service")
+    router_service = router_service_match.groupdict()
+    external_ip = router_service['external_ip']
+    log.debug('Default ingress route external ip: %s', external_ip)
+
+    for possible_lb in elb.describe_load_balancers(Names=external_ip.split('-')[0])['LoadBalancers']:
+        log.debug('Reading LoadBalancer information %s', possible_lb)
+        if possible_lb['DNSName'] == external_ip:
+            return possible_lb['CanonicalHostedZoneId']
+    log.error('Load Balancer zone not found')
+    raise RuntimeError('Load balancer canonical zone id could not be found')
+
+
+def bootstrap_post_process(oc, kubeconfig_path, certificate_arn):
+    """
+    Performs any post-install steps on the cluster
+
+    :param oc: Openshift client
+    :param kubeconfig_path: KubeConfig path
+    :param certificate_arn: ACM Certificate ARN
+    :return:
+    """
     LOG.info('Starting Post-Process steps')
-    if cert_arn is not None:
-        patch_yaml = CERTIFICATE_PATCH_YAML.format(cert_arn=cert_arn)
-        p = run_process(
-            f'{oc} --config {kubeconfig_path} patch services -n openshift-ingress router-default --patch "{patch_yaml}"')
+    if not certificate_arn:
+        LOG.debug('No Certificate ARN found. No post-boot processes necessary')
+        return
+    patch_yaml = CERTIFICATE_PATCH_YAML.format(certificate_arn=certificate_arn)
+    run_process(
+        f'{oc} --config {kubeconfig_path} patch services -n openshift-ingress router-default --patch "{patch_yaml}"')
+
+    LOG.info('Replacing default Ingress Controller')
+    ingress_yaml_path = os.path.join('/tmp', 'ingress.yaml')
+    with open(ingress_yaml_path, 'w') as f:
+        f.write(DEFAULT_INGRESS_REPLACEMENT)
+    run_process(f'{oc} --config {kubeconfig_path} replace --force --wait -f {ingress_yaml_path}')
+    LOG.debug('Waiting to give LoadBalancer time to become available')
+    time.sleep(30)
     LOG.info('Finished Post-Process steps')
-    return True
 
 
 #
@@ -299,8 +345,20 @@ metadata:
         service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
         service.beta.kubernetes.io/aws-load-balancer-ssl-cert: {certificate_arn}
         service.beta.kubernetes.io/aws-load-balancer-ssl-ports: '443'
+        service.beta.kubernetes.io/aws-load-balancer-type: nlb
 '''
 
+# Used when SSL certificate integration is requested
+DEFAULT_INGRESS_REPLACEMENT = '''apiVersion: v1
+kind: IngressController
+metadata:
+    name: default
+    namespace: openshift-ingress-operator
+spec:
+    replicas: 3
+    endpointPublishingStrategy:
+        type: HostNetwork
+'''
 #
 # Template for install-config.yaml
 #
