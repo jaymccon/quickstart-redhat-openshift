@@ -16,6 +16,7 @@ Metadata:
           - PublicSubnet2ID
           - PublicSubnet3ID
           - SSLCertificateId
+          - SSLPrivateKeySecretName
       - Label:
           default: Amazon EC2 Configuration
         Parameters:
@@ -99,6 +100,8 @@ Metadata:
         default: Public Subnet 2 ID
       PublicSubnet3ID:
         default: Public Subnet 3 ID
+      SSLPrivateKeySecretName:
+        default: SSL Private Key Secret Name
 Parameters:
   MasterInstanceProfileName:
     Description: (Optional) Provide an IAM Instance profile name to use for control plane nodes
@@ -299,6 +302,10 @@ Parameters:
   HostedZoneID:
     Type: String
 
+  SSLPrivateKeySecretName:
+    Description: AWS Secrets Manager name for the SSL Private Key for the certificate in ACM. If provided, Quickstart will load your Certificate and Key into the OpenShift cluster.
+    Type: String
+    Default: ''
   SSLCertificateId:
     Type: String
     Description: (Optional) The AWS ACM SSL Certificate ARN to use for LoadBalancer configuration
@@ -465,6 +472,7 @@ Resources:
         VpcId: !Ref VPCID
         HostedZoneName: !Ref HostedZoneName
         HostedZoneId: !Ref HostedZoneID
+        ACMCertificateId: !Ref SSLCertificateId
         PublicSubnets: !Join
           - ","
           - [!Ref PublicSubnet1ID, !Ref PublicSubnet2ID, !Ref PublicSubnet3ID]
