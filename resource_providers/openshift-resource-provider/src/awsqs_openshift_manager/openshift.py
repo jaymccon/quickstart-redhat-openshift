@@ -1,6 +1,5 @@
 import glob
 import re
-import time
 import subprocess
 import json
 import logging
@@ -207,7 +206,6 @@ def wait_for_operators(oc: str, kubeconfig_path: str) -> bool:
     try:
         p = run_process(f'{oc} --config {kubeconfig_path} get clusteroperators')
         operators = []
-        status = 'not ready'
         cluster_ready = False
         for line in p.stdout.splitlines()[1:]:
             str_line = line.decode('utf-8')
@@ -248,10 +246,57 @@ def bootstrap_post_process(oc, kubeconfig_path, remove_builtin_ingress=False, do
         return
     LOG.info('Replacing default Ingress Controller')
     ingress_yaml_path = os.path.join('/tmp', 'ingress.yaml')
+    ingress_yaml = DEFAULT_INGRESS_REPLACEMENT.format(domain=f'apps.{domain}')
     with open(ingress_yaml_path, 'w') as f:
-        f.write(DEFAULT_INGRESS_REPLACEMENT.format(domain=f'apps.{domain}'))
+        f.write(ingress_yaml)
+    LOG.debug('Ingress YAML: %s', ingress_yaml)
     run_process(f'{oc} --config {kubeconfig_path} replace --force --wait -f {ingress_yaml_path}')
     LOG.info('Finished Post-Process steps')
+
+
+def load_certificate_and_patch_ingress(oc, kubeconfig_path, cert, private_key, cert_chain=''):
+    """
+    Takes a Private Key and Certificate and loads into the OpenShift cluster as the default ingress' TLS certificate
+
+    :param oc: OpenShift client cmd
+    :param kubeconfig_path: Path to kubeconfig file
+    :param cert: The Certificate to load into the cluster
+    :param private_key: The Private Key to load into the cluster
+    :param cert_chain:  A certificate chain. Default is empty string
+    :return: True if success. False, otherwise
+    """
+    log.info('Attempting to load a custom TLS certificate from the cert/key provided')
+    cert_path = os.path.join('/tmp', 'tls.crt')
+    key_path = os.path.join('/tmp', 'tls.key')
+    with open(cert_path, 'w') as f:
+        f.write('\n'.join([cert, cert_chain]))
+    with open(key_path, 'w') as f:
+        f.write(private_key)
+
+    try:
+        run_process(f'{oc} --config {kubeconfig_path} --namespace openshift-ingress create secret tls '
+                    f'custom-certs-default --cert={cert_path} --key={key_path}')
+        log.info('Successfully loaded cert/key into cluster as a Kube secret')
+        log.info('Patching default ingress to use our cert/key pair')
+        run_process(f'{oc} --config {kubeconfig_path} patch --type=merge --namespace openshift-ingress-operator '
+                    f'ingresscontrollers/default --patch '
+                    '\'{"spec": {"defaultCertificate": {"name": "custom-certs-default"}}}\'')
+
+        log.info('Validating that certificate was changed successfully')
+        validate = run_process(f'{oc} --config {kubeconfig_path} get --namespace openshift-ingress-operator '
+                               'ingresscontrollers/default --output jsonpath=\'{.spec.defaultCertificate}\'')
+
+        if 'map[name:custom-certs-default]' in validate.stdout.decode('utf-8'):
+            log.info('Successfully patched the default ingress. Routes will now use our imported cert/key pair')
+            return True
+        else:
+            log.warning('WARNING - Something went wrong. Our custom certificate is not being used. Check the logs and '
+                        'cluster for more info ')
+            return False
+    except (subprocess.CalledProcessError, OSError, TypeError):
+        log.warning('WARNING - Something went wrong while importing the custom cert/key pair. Check the logs for more '
+                    'info')
+        return False
 
 
 # Used when SSL certificate integration is requested

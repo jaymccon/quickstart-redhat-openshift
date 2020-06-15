@@ -38,6 +38,32 @@ def write_kubeconfig(session, kubeconfig_id, parent_dir='/tmp/'):
     return kubeconfig_path
 
 
+def fetch_cert_and_key(session: SessionProxy, certificate_arn, private_key_secret_name):
+    """
+    Fetches Certificate and Private Key material from Amazon Certificate Manager and Secrets Manager
+
+    :param session: Boto3 session
+    :param certificate_arn: Valid ACM ARN
+    :param private_key_secret_name: Valid Secrets Manager Name ID
+    :return: Certificate, Certificate Chain, Private Key
+    """
+    secrets = session.client('secretsmanager')
+    acm = session.client('acm')
+    log.info('Fetching custom Ingress Certificate from ACM ')
+    log.debug('ACM ARN: %s', certificate_arn)
+    cert_response = acm.get_certificate(CertificateArn=certificate_arn)
+    log.debug('Certificate Data: %s', cert_response)
+    cert = cert_response['Certificate']
+    cert_chain = cert_response['CertificateChain']
+
+    log.info('Fetching custom Ingress Private Key from Secrets Manager')
+    log.debug('Secret Name: %s', private_key_secret_name)
+    private_key = secrets.get_secret_value(SecretId=private_key_secret_name)['SecretString']
+    log.info('Secret fetched successfully')
+
+    return cert, cert_chain, private_key
+
+
 def verify_sha256sum(filename, sha256sum):
     """
     Takes a filename and runs a SHA256 checksum to validate
@@ -332,7 +358,7 @@ def terminate_bootstrap_instance(model, session):
     if len(response['Reservations']) > 0:
         LOG.info('[DELETE] Deleting Bootstrap nodes %s', response['Reservations'])
         client.terminate_instances(
-            InstanceIds=[response['Instances'][0]['InstanceId'] for bootstrap_instance in response['Reservations']]
+            InstanceIds=[bootstrap_instance['Instances'][0]['InstanceId'] for bootstrap_instance in response['Reservations']]
         )
     else:
         LOG.info('[DELETE] No Worker nodes to delete')

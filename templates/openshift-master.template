@@ -35,7 +35,8 @@ Metadata:
           - HostedZoneID
           - SubDomainPrefix
           - CertificateArn
-          - SSLPrivateKeySecretName
+          - ClusterIngressPrivateKeySecretName
+          - ClusterIngressCertificateArn
       - Label:
           default: Amazon EC2 Configuration
         Parameters:
@@ -197,11 +198,17 @@ Metadata:
         default: Enable the cluster console (Requires OpenShift 3.11)
       NumberOfAZs:
         default: Number of Availability Zones
-      SSLPrivateKeySecretName:
-        default: SSL Private Key Secret Name
+      ClusterIngressPrivateKeySecretName:
+        default: Cluster Ingress Private Key Secret Name
+      ClusterIngressCertificateArn:
+        default: Cluster Ingress Certificate ARN
 Parameters:
-  SSLPrivateKeySecretName:
-    Description: AWS Secrets Manager name for the SSL Private Key for the certificate in ACM. If provided, Quickstart will load your Certificate and Key into the OpenShift cluster.
+  ClusterIngressPrivateKeySecretName:
+    Description: AWS Secrets Manager name for the SSL Private Key for the Cluster Ingress certificate in ACM. If provided, Quickstart will load your Certificate and Key into the OpenShift cluster. Secret value must be PEM encoded.
+    Type: String
+    Default: ''
+  ClusterIngressCertificateArn:
+    Description: Optional ACM ARN for a SSL Certificate to import into the default OpenShift ingress. Must be certificate signed for your cluster's wildcard domain. Requires `ClusterIngressPrivateKeySecretName`
     Type: String
     Default: ''
   MasterInstanceProfileName:
@@ -761,7 +768,8 @@ Resources:
           -  OpenShiftInstallBinary
         SSHKey: !Ref SSHKey
         PullSecret: !Ref PullSecret
-        SSLPrivateKeySecretName: !Ref SSLPrivateKeySecretName
+        ClusterIngressPrivateKeySecretName: !Ref ClusterIngressPrivateKeySecretName
+        ClusterIngressCertificateArn: !Ref ClusterIngressCertificateArn
 
         MasterInstanceProfileName: !Ref MasterInstanceProfileName
         WorkerInstanceProfileName: !Ref WorkerInstanceProfileName

@@ -57,6 +57,8 @@ class ResourceModel(BaseModel):
     AvailabilityZones: Optional[Sequence[str]]
     Subnets: Optional[Sequence[str]]
     CertificateArn: Optional[str]
+    ClusterIngressCertificateArn: Optional[str]
+    ClusterIngressPrivateKeySecretName: Optional[str]
     InfrastructureName: Optional[str]
     InfrastructureId: Optional[str]
     KubeConfig: Optional[str]
@@ -91,6 +93,8 @@ class ResourceModel(BaseModel):
             AvailabilityZones=json_data.get("AvailabilityZones"),
             Subnets=json_data.get("Subnets"),
             CertificateArn=json_data.get("CertificateArn"),
+            ClusterIngressCertificateArn=json_data.get("ClusterIngressCertificateArn"),
+            ClusterIngressPrivateKeySecretName=json_data.get("ClusterIngressPrivateKeySecretName"),
             InfrastructureName=json_data.get("InfrastructureName"),
             InfrastructureId=json_data.get("InfrastructureId"),
             KubeConfig=json_data.get("KubeConfig"),

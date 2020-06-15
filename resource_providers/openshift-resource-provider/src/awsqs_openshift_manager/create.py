@@ -8,9 +8,10 @@ from typing import Optional, Mapping
 from cloudformation_cli_python_lib import OperationStatus, SessionProxy
 
 from .util import upload_ignition_files_to_s3, write_kubeconfig, \
-    fetch_openshift_binary, terminate_bootstrap_instance
+    fetch_openshift_binary, terminate_bootstrap_instance, fetch_cert_and_key
 from .read import fetch_kube_parameters
-from .openshift import cluster_api_available, wait_for_operators, bootstrap_post_process
+from .openshift import cluster_api_available, wait_for_operators, bootstrap_post_process, \
+    load_certificate_and_patch_ingress
 from .openshift import generate_ignition_files
 from .models import ResourceModel
 
@@ -160,6 +161,10 @@ def bootstrap_create(model: ResourceModel, stage: str, start_time: float, sessio
             bootstrap_post_process(oc_bin, kubeconfig_path,
                                    remove_builtin_ingress=bool(model.CertificateArn),
                                    domain=f'{model.ClusterName}.{model.HostedZoneName}')
+            if model.ClusterIngressCertificateArn and model.ClusterIngressPrivateKeySecretName:
+                cert, cert_chain, key = fetch_cert_and_key(session, model.ClusterIngressCertificateArn,
+                                                           model.ClusterIngressPrivateKeySecretName)
+                load_certificate_and_patch_ingress(oc_bin, kubeconfig_path, cert, key, cert_chain=cert_chain)
             try:
                 terminate_bootstrap_instance(model, session)
             except Exception as e:

@@ -198,6 +198,13 @@ def validate_create(model: ResourceModel):
         if not (model.AwsSecretAccessKey and model.AwsAccessKeyId):
             raise AttributeError(
                 "AwsAccessKeyId and AwsSecretAccessKey must be provided when generating Ignition files")
+    if model.Action == "BOOTSTRAP":
+        if (model.ClusterIngressCertificateArn or model.ClusterIngressPrivateKeySecretName) and \
+                (not model.ClusterIngressPrivateKeySecretName or not model.ClusterIngressCertificateArn):
+            raise AttributeError(
+                "You must set both ClusterIngressCertificateArn and ClusterIngressPrivateKeySecretName or neither. "
+                "These two parameters must represent the public-private keypair "
+            )
     return True
 
 

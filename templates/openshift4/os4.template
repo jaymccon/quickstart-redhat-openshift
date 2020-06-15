@@ -16,7 +16,8 @@ Metadata:
           - PublicSubnet2ID
           - PublicSubnet3ID
           - SSLCertificateId
-          - SSLPrivateKeySecretName
+          - ClusterIngressPrivateKeySecretName
+          - ClusterIngressCertificateArn
           - ContainerAccessCIDR
           - RemoteAccessCIDR
           - HostedZoneID
@@ -98,8 +99,10 @@ Metadata:
         default: Public Subnet 2 ID
       PublicSubnet3ID:
         default: Public Subnet 3 ID
-      SSLPrivateKeySecretName:
-        default: SSL Private Key Secret Name
+      ClusterIngressPrivateKeySecretName:
+        default: Cluster Ingress Private Key Secret Name
+      ClusterIngressCertificateArn:
+        default: Cluster Ingress Certificate ARN
       HostedZoneID:
         default: Route 53 Hosted Zone ID
 Parameters:
@@ -316,8 +319,12 @@ Parameters:
     Type: String
     Default: ""
 
-  SSLPrivateKeySecretName:
+  ClusterIngressPrivateKeySecretName:
     Description: AWS Secrets Manager name for the SSL Private Key for the certificate in ACM. If provided, Quickstart will load your Certificate and Key into the OpenShift cluster.
+    Type: String
+    Default: ''
+  ClusterIngressCertificateArn:
+    Description: Optional ACM ARN for a SSL Certificate to import into the default OpenShift ingress. Must be certificate signed for your cluster's wildcard domain. Requires `ClusterIngressPrivateKeySecretName`
     Type: String
     Default: ''
   SSLCertificateId:
@@ -470,6 +477,8 @@ Resources:
       HostedZoneName: !Ref HostedZoneName
       LogLevel: !Ref LogLevel
       CertificateArn: !Ref SSLCertificateId
+      ClusterIngressCertificateArn: !Ref ClusterIngressCertificateArn
+      ClusterIngressPrivateKeySecretName: !Ref ClusterIngressPrivateKeySecretName
 
   #
   # Sets up Networking
