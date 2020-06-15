@@ -525,7 +525,7 @@ Parameters:
     Default: ""
   DomainName:
     Description: >-
-      OPTIONAL: domain name configured for the cluster, if left blank self signed
+      OPTIONAL for OS3. REQUIRED for OS4: domain name configured for the cluster, if left blank self signed
       certificates will be used for TLS and the LoadBalancer's auto-generated hostname
       will be used for connections from outside the cluster.
     Type: String
