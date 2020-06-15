@@ -71,32 +71,16 @@ Tested 05-28
 
 ## BYO Certificates
 
-Allow Stack operators to pass in an ACM certificate ARN to use for the default
-cluster ingress loadbalancer. OS4 installation does not natively support this and we need to code some steps into a Lambda custom resource
+This process was tested 06-14
 
-If user BYO certificate, do the following. Otherwise, keep default behavior (OS4 generates a classic load balancer with a self-signed certificate):
-1. during installation, turn off DNS zone management
-2. Wait for cluster to come up
-3. Edit the Openshift router service `oc edit services -n openshift-ingress router-default` using a Lambda func / custom resource
-4. Add annotations
-```
-service.beta.kubernetes.io/aws-load-balancer-backend-protocol: ssl
-service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
-service.beta.kubernetes.io/aws-load-balancer-ssl-cert: <ACM_ARN>
-service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
-```
-6. Wait for loadbalancer resource to be created
-7. Create wildcard `*.apps.<clusterdomain>` alias record in private zone
-8. Create wildcard `*.apps.<clusterdomain>` alias record in public zone
-
-This process was tested 05-27
+See <https://access.redhat.com/solutions/4922421> for solution
 
 # TODOs
 
 - [x] Allow users to select number of Worker nodes at install
 - [x] Custom resource provider for OPenshift4 installer
 - [x] Create AWS Secret in Openshift4 installer. Fetches Kubeconfig
-- [ ] Known Bug: the first time we request a certificate for a new subdomain /
+- [x] Known Bug: the first time we request a certificate for a new subdomain /
   clustername, the `*.apps` wildcard validation CNAME DNS record doesn't get created. no errors?
 - [x] Be more efficient with Custom Lambdas Stack -- not all the functions need to be created for OS4
 - [x] Test some Helm Custom resources

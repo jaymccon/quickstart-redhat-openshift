@@ -252,6 +252,7 @@ Parameters:
   PullSecret:
     Description: '(Required for OS4) The OCP Pull Secret JSON'
     Type: String
+    NoEcho: 'true'
 
   SSHKey:
     Description: (Optional for OS v4) The public key to be added to the CoreOS boxes for ssh access.
@@ -776,6 +777,7 @@ Resources:
 
         # Network Configuration
         RemoteAccessCIDR: !Ref RemoteAccessCIDR
+        ContainerAccessCIDR: !Ref ContainerAccessCIDR
         VPCCIDR: !If
           - SetupVPC
           - !GetAtt 'VPCStack.Outputs.VPCCIDR'
