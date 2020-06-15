@@ -291,11 +291,3 @@ The unique identifier for the OpenShift cluster
 
 An ARN to the KubeConfig file stored in Secrets Manager
 
-#### IngressZoneId
-
-The Zone ID for the default ingress load balancer
-
-#### IngressDNS
-
-The DNS hostname for the default ingress load balancer
-

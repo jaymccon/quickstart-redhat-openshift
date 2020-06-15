@@ -89,14 +89,6 @@
             "type": "string",
             "description": "An ARN to the ACM certificate for user Applications"
         },
-        "IngressDNS": {
-            "description": "The DNS hostname for the default ingress load balancer",
-            "type": "string"
-        },
-        "IngressZoneId": {
-            "description": "The Zone ID for the default ingress load balancer",
-            "type": "string"
-        },
         "InfrastructureName": {
             "description": "The unique identifier for the OpenShift cluster",
             "pattern": "^[a-zA-Z0-9_-]+$",
@@ -131,9 +123,7 @@
     "readOnlyProperties": [
         "/properties/KubeAdminPasswordArn",
         "/properties/InfrastructureId",
-        "/properties/KubeConfigArn",
-        "/properties/IngressZoneId",
-        "/properties/IngressDNS"
+        "/properties/KubeConfigArn"
     ],
     "primaryIdentifier": [
         "/properties/Action",
