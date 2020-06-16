@@ -11,6 +11,16 @@ Features:
 - Installation Logs and Metrics delivered to AWS CloudWatch
 - KubeConfig is stored in Secrets Manager to help integrate w/ AWSQS::Kubernetes::Helm
 
+# Live Demo
+
+<https://console-openshift-console.apps.openshift4-useast1.t3-osqs43.openshift.awsworkshop.io/>
+
+Built with following settings:
+* BYO VPC
+* BYO ACM Certificate (*.apps.openshift4-useast1.t3-osqs43.openshift.awsworkshop.io)
+* BYO Cluster Ingress cert (for OAuth any other "passthrough" services; uses LetsEncrypt test certificate)
+* `kubeadmin` and `kubeconfig` located in AWS Secrets Manager
+
 # Before Starting
 
 - You must provision a RedHat Pull Secret
@@ -30,13 +40,13 @@ configuration. To use a trusted CA signed certificate for the Cluster Login you
 must set  `ClusterIngressPrivateKeySecretName` and
 `ClusterIngressCertificateArn`
 
-- ClusterName: Name of the cluster
-- AvailabilityZones: List of valid AZs
-- DomainName: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
-- HostedZoneId (optional, but recommended): Route53 Public Zone for DNS
-- PullSecret: Redhat Pull Secret JSON
-- QSS3BucketName (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
-- QSSKeyPrefix (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
+- **ClusterName**: Name of the cluster
+- **AvailabilityZones**: List of valid AZs
+- **DomainName**: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
+- **HostedZoneId** (optional, but recommended): Route53 Public Zone for DNS
+- **PullSecret**: Redhat Pull Secret JSON
+- **QSS3BucketName** (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
+- **QSSKeyPrefix** (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
 
 
 ## BYO VPC
@@ -44,52 +54,52 @@ must set  `ClusterIngressPrivateKeySecretName` and
 Instead of letting the QuickStart templates create a VPC, you can optionally provide a VPC ID and Subnet IDs. You must
 provide valid Public/Private subnets for the availability zones parameter.
 
-- ClusterName: Name of the cluster
-- AvailabilityZones: List of valid AZs
-- DomainName: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
-- HostedZoneId (optional, but recommended): Route53 Public Zone for DNS
-- PullSecret: Redhat Pull Secret JSON
-- QSS3BucketName (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
-- QSSKeyPrefix (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
-- VPCID: VPC ID
-- PublicSubnet1ID: Public Subnet in AZ-1
-- PublicSubnet2ID: Public Subnet in AZ-2
-- PublicSubnet3ID: Public Subnet in AZ-3
-- PrivateSubnet1ID: Private Subnet in AZ-1
-- PrivateSubnet2ID: Private Subnet in AZ-2
-- PrivateSubnet3ID: Private Subnet in AZ-3
+- **ClusterName**: Name of the cluster
+- **AvailabilityZones**: List of valid AZs
+- **DomainName**: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
+- **HostedZoneId** (optional, but recommended): Route53 Public Zone for DNS
+- **PullSecret**: Redhat Pull Secret JSON
+- **QSS3BucketName** (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
+- **QSSKeyPrefix** (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
+- **VPCID**: VPC ID
+- **PublicSubnet1ID**: Public Subnet in AZ-1
+- **PublicSubnet2ID**: Public Subnet in AZ-2
+- **PublicSubnet3ID**: Public Subnet in AZ-3
+- **PrivateSubnet1ID**: Private Subnet in AZ-1
+- **PrivateSubnet2ID**: Private Subnet in AZ-2
+- **PrivateSubnet3ID**: Private Subnet in AZ-3
 
 ## BYO SSL Certificates
 
 Instead of auto-generating ACM certificates, you can pass in an ACM ARN for both the Applications endpoint (where all
 user-defined applications are accessible) and the OAuth login endpoint (which must use the internal Cluster certificate)
 
-- ClusterName: Name of the cluster
-- AvailabilityZones: List of valid AZs
-- DomainName: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
-- HostedZoneId (optional, but recommended): Route53 Public Zone for DNS
-- PullSecret: Redhat Pull Secret JSON
-- QSS3BucketName (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
-- QSSKeyPrefix (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
-- CertificateArn: An ACM Certificate ARN for the Applications (default) endpoint
-- ClusterIngressCertificateArn: An **imported** ACM certificate ARN that is signed by a trusted public CA. 
+- **ClusterName**: Name of the cluster
+- **AvailabilityZones**: List of valid AZs
+- **DomainName**: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
+- **HostedZoneId** (optional, but recommended): Route53 Public Zone for DNS
+- **PullSecret**: Redhat Pull Secret JSON
+- **QSS3BucketName** (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
+- **QSSKeyPrefix** (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
+- **CertificateArn**: An ACM Certificate ARN for the Applications (default) endpoint
+- **ClusterIngressCertificateArn**: An **imported** ACM certificate ARN that is signed by a trusted public CA. 
   Use if you need a valid, trusted certificate imported into the Cluster so the OAuth endpoint has a valid cert. 
   See <https://access.redhat.com/solutions/4922421> for more info.
-- ClusterIngressPrivateKeySecretName: An Amazon Secrets Manager Secret Name for the Private Key portion (PEM) of
+- **ClusterIngressPrivateKeySecretName**: An Amazon Secrets Manager Secret Name for the Private Key portion (PEM) of
   `ClusterIngressCertificateArn`
 
 ## BYO IAM Roles
 
 
-- ClusterName: Name of the cluster
-- AvailabilityZones: List of valid AZs
-- DomainName: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
-- HostedZoneId (optional, but recommended): Route53 Public Zone for DNS
-- PullSecret: Redhat Pull Secret JSON
-- QSS3BucketName (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
-- QSSKeyPrefix (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
-- WorkerInstanceProfileName: Valid IAM Instance profile for all Worker nodes
-- MasterInstanceProfileName: Valid IAM Instance profile for all control plane nodes
+- **ClusterName**: Name of the cluster
+- **AvailabilityZones**: List of valid AZs
+- **DomainName**: Base domain name of the cluster. Full cluster domain will be ${ClusterName}.${DomainName}
+- **HostedZoneId** (optional, but recommended): Route53 Public Zone for DNS
+- **PullSecret**: Redhat Pull Secret JSON
+- **QSS3BucketName** (optional after quickstart is public release): S3 Bucket where these quickstart templates exist
+- **QSSKeyPrefix** (optional after quickstart is public release): S3 Prefix where these quickstart templates exist
+- **WorkerInstanceProfileName**: Valid IAM Instance profile for all Worker nodes
+- **MasterInstanceProfileName**: Valid IAM Instance profile for all control plane nodes
 
 
 ## Sample `.taskcat_overrides.yml`
@@ -124,7 +134,6 @@ PrivateSubnet3ID: subnet-044cba7bbe98a87e7
 PullSecret: '{"auths":{"cloud.openshift.com":{"auth": ......
 
 ```
-
 
 # Code re-organization FYIs
 
