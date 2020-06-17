@@ -698,11 +698,7 @@ Outputs:
 
   OpenShiftUI:
     Description: The URL OpenShiftUI
-    Value: !Join
-      - ''
-      - - https://
-        - !GetAtt NetworkStack.Outputs.ExtApiServerDnsName
-        - ':6443'
+    Value: !Sub "https://console-openshift-console.apps.${ClusterName}.${HostedZoneName}"
 
 
   KubeAdminPassword:
