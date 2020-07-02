@@ -1,1 +1,8 @@
-// placeholder
+:template_aws_cloudformation_stack:
+:template_aws_logs_loggroup:
+:template_aws_s3_bucket:
+:template_cloudformation:
+:template_custom_deletebucketcontents:
+:template_deletebucketcontents:
+:template_logs:
+:template_s3:

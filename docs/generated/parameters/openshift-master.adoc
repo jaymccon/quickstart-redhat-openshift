@@ -1,0 +1,108 @@
+
+.Network Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Availability Zones
+(`AvailabilityZones`)|`**__Requires Input__**`|List of Availability Zones to use for the subnets in the VPC. Three Availability Zones are used for this deployment, and the logical order of your selections is preserved.|VPC CIDR
+(`VPCCIDR`)|`10.0.0.0/16`|CIDR block for the VPC|Private Subnet 1 CIDR
+(`PrivateSubnet1CIDR`)|`10.0.0.0/19`|CIDR block for private subnet 1 located in Availability Zone 1|Private Subnet 2 CIDR
+(`PrivateSubnet2CIDR`)|`10.0.32.0/19`|CIDR block for private subnet 2 located in Availability Zone 2|Private Subnet 3 CIDR
+(`PrivateSubnet3CIDR`)|`10.0.64.0/19`|CIDR block for private subnet 2 located in Availability Zone 3|Public Subnet 1 CIDR
+(`PublicSubnet1CIDR`)|`10.0.128.0/20`|CIDR block for the public (DMZ) subnet 1 located in Availability Zone 1|Public Subnet 2 CIDR
+(`PublicSubnet2CIDR`)|`10.0.144.0/20`|CIDR block for the public (DMZ) subnet 2 located in Availability Zone 2|Public Subnet 3 CIDR
+(`PublicSubnet3CIDR`)|`10.0.160.0/20`|CIDR block for the public (DMZ) subnet 2 located in Availability Zone 3|Allowed External Access CIDR (OCP UI)
+(`RemoteAccessCIDR`)|`**__Requires Input__**`|The CIDR IP range that is permitted to access the instances We recommend that you set this value to a trusted IP range.|Allowed External Access CIDR (OCP Router)
+(`ContainerAccessCIDR`)|`**__Requires Input__**`|The CIDR IP range that is permitted to access the instances We recommend that you set this value to a trusted IP range.|Number of Availability Zones
+(`NumberOfAZs`)|`3`|The number of Availability Zones to be used for the deployment. 3 Availability Zones are needed to avoid a single point of failure when using 3 or more master nodes or etcd nodes.
+|===
+.Existing VPC Deployment Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|VPC ID
+(`VPCID`)|``|ID of your existing VPC for deployment|Private Subnet 1 ID
+(`PrivateSubnet1ID`)|``|ID of private subnet 1 in Availability Zone 1 for the Workload (e.g., subnet-a0246dcd)|Private Subnet 2 ID
+(`PrivateSubnet2ID`)|``|ID of private subnet 2 in Availability Zone 2 for the Workload (e.g., subnet-b1f432cd)|Private Subnet 3 ID
+(`PrivateSubnet3ID`)|``|ID of private subnet 3 in Availability Zone 3 for the Workload (e.g., subnet-b1f4a2cd)|Public Subnet 1 ID
+(`PublicSubnet1ID`)|``|ID of private subnet 1 in Availability Zone 1 for the Workload (e.g., subnet-a0246dcd)|Public Subnet 2 ID
+(`PublicSubnet2ID`)|``|ID of private subnet 2 in Availability Zone 2 for the Workload (e.g., subnet-b1f432cd)|Public Subnet 3 ID
+(`PublicSubnet3ID`)|``|ID of private subnet 3 in Availability Zone 3 for the Workload (e.g., subnet-b1f4a2cd)
+|===
+.DNS Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Domain Name
+(`DomainName`)|``|OPTIONAL: domain name configured for the cluster, if left blank self signed certificates will be used for TLS and the LoadBalancer's auto-generated hostname will be used for connections from outside the cluster.|Route 53 Hosted Zone ID
+(`HostedZoneID`)|``|OPTIONAL: Route 53 Hosted Zone ID to use. If left blank route 53 will not be configured and DNS must be setup manually If you specify this you must also specify DomainName|Subdomain Prefix
+(`SubDomainPrefix`)|``|OPTIONAL: Subdomain to use, if left blank DomainName will be used without a prefix. If you specify this you must also specify DomainName and HostedZoneID|Certificate ARN
+(`CertificateArn`)|``|OPTIONAL: Specify the ACM arn of the certificate for OpenShift applications. Must be valid for *.apps.${ClusterName}.${DomainName}. Example: *.apps.my-cluster.example.com|Cluster Ingress Private Key Secret Name
+(`ClusterIngressPrivateKeySecretName`)|``|AWS Secrets Manager name for the SSL Private Key for the Cluster Ingress certificate in ACM. If provided, Quickstart will load your Certificate and Key into the OpenShift cluster. Secret value must be PEM encoded.|Cluster Ingress Certificate ARN
+(`ClusterIngressCertificateArn`)|``|Optional ACM ARN for a SSL Certificate to import into the default OpenShift ingress. Must be certificate signed for your cluster's wildcard domain. Requires `ClusterIngressPrivateKeySecretName`
+|===
+.Amazon EC2 Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|SSH Key Name
+(`KeyPairName`)|``|(OS v3 only. Use SSHKey Parameter for OS v4) The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches|AMI ID
+(`AmiId`)|``|OPTIONAL: bring your own AMI. In Enterprise environment, you might need to bring your own AMI (with proxy, softwares, ...). If the AMI is encrypted, keep in mind that the key policy should allow use of the key from AWSServiceRoleForAutoScaling. If left blank, we'll use the base RHEL image from your region.
+|===
+.OpenShift Hosts Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Number of Masters
+(`NumberOfMaster`)|`3`|This Deployment requires at least 3 OpenShift Master instances|Number of Nodes
+(`NumberOfNodes`)|`3`|The desired capacity for the OpenShift node instances|Master Instance Type
+(`MasterInstanceType`)|`m5.xlarge`|Type of EC2 instance for the Master instances|Nodes Instance Type
+(`NodesInstanceType`)|`m5.xlarge`|Type of EC2 instance for the Node instances|SSH Public Key
+(`SSHKey`)|``|The public key to be added to the CoreOS boxes for ssh access.
+|===
+.OpenShift Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Openshift Container Platform Version
+(`OpenshiftContainerPlatformVersion`)|`4.3`|OpenShift version to deploy|Cluster Name
+(`ClusterName`)|``|Custom cluster name for kubernetes.io/cluster/ tags, if left blank will use the stackname suffixed with the region
+|===
+.OpenShift v4 Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|**NO_LABEL**
+(`PullSecret`)|`**__Requires Input__**`|Required for OpenShift v4: The OCP Pull Secret JSON|Master IAM Instance Profile Name
+(`MasterInstanceProfileName`)|``|Optional: Provide an IAM Instance profile name to use for control plane nodes. If unprovided, OpenShift will configure a new IAM Instance Profile for you|Worker IAM Instance Profile Name
+(`WorkerInstanceProfileName`)|``|Optional: Provide an IAM Instance profile name to use for worker nodes. If unprovided, OpenShift will configure a new IAM Instance Profile for you
+|===
+.OpenShift v3 Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Openshift Container Platform Version
+(`OpenshiftContainerPlatformVersion`)|`4.3`|OpenShift version to deploy|AWS Service Broker
+(`AWSServiceBroker`)|`Enabled`|Enable the AWS Service Broker|Hawkular Metrics
+(`HawkularMetrics`)|`Enabled`|Enable Hawkular cluster metrics|Get Ansible from Git
+(`AnsibleFromGit`)|`False`|Get openshift installer playbooks from GitHub. By default, they come from RPM.|GlusterFS
+(`GlusterFS`)|`Disabled`|Enable GlusterFS storage cluster|Gluster Storage Size
+(`GlusterStorageSize`)|`1000`|Size in GB of the available storage (will create 3x ebs volumes of this size)|Gluster EBS volume type
+(`GlusterStorageType`)|`io1`|EBS volume type to use for storage|Gluster Storage Iops
+(`GlusterStorageIops`)|`3000`|EBS volume IOPS to allocate (only applicable if io1 has been selected for GlusterStorageType)|Gluster Storage Encrypted
+(`GlusterStorageEncrypted`)|`False`|Enable EBS encryption for Gluster storage volumes|Gluster Instance Type
+(`GlusterInstanceType`)|`i3.large`|Type of EC2 instance for the Node instances|Number of Gluster Hosts
+(`NumberOfGluster`)|`3`|This Deployment requires a minimum of 3 Gluster instances|OpenSift Automation Broker
+(`AutomationBroker`)|`Enabled`|Enable the OpenShift Automation Service Broker|Enable the cluster console (Requires OpenShift 3.11)
+(`ClusterConsole`)|`Enabled`|Enable the Cluster Console|Number of Etcds
+(`NumberOfEtcd`)|`3`|This Deployment requires at least 3 OpenShift Etcd instances|Etcd Instance Type
+(`EtcdInstanceType`)|`m5.xlarge`|Type of EC2 instance for the Etcd instances|OpenShift UI Password
+(`OpenShiftAdminPassword`)|`**__Requires Input__**`|(Optional for OS v4) Password for OpenShift Admin UI Must be at least 8 and no more than 12 characters containing letters and (minimum 1 capital letter), numbers and symbols
+|===
+.OpenShift v3 Red Hat Subscription Information
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Red Hat Subscription User Name
+(`RedhatSubscriptionUserName`)|``|(Required for OS v3) Enter Redhat RHN User Name|Red Hat Subscription Password
+(`RedhatSubscriptionPassword`)|``|(Required for OS v3) Enter Redhat RHN Password|Red Hat Pool ID
+(`RedhatSubscriptionPoolID`)|``|(Required for OS v3) Enter Redhat RHN PoolID
+|===
+.AWS Quick Start Configuration
+[width="100%",cols="16%,11%,73%",options="header",]
+|===
+|Parameter label (name) |Default Value|Description|Quick Start S3 Bucket Name
+(`QSS3BucketName`)|`aws-quickstart`|S3 bucket name for the Quick Start assets. This string can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).|Quick Start S3 Key Prefix
+(`QSS3KeyPrefix`)|`quickstart-redhat-openshift/`|S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
+|===
